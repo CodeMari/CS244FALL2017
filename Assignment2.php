@@ -1,4 +1,4 @@
- <?php
+<?php
 $servername = "localhost";
 $username = "root";
 $password = "";
@@ -7,13 +7,20 @@ $dbname = "esp8266asgn1";
 $IR = $_GET["IR"];
 $RED = $_GET["RED"];
 
-$file = fopen('HW2Vals.csv', 'a');
+if(!file_exists('HW2Vals4.csv')) {
 
-//fputcsv($file, array('IR', 'RED'));
+	$file = fopen('HW2Vals4.csv', 'w');
+	fputcsv($file, array('IR', 'RED'));
+
+} else {
+
+	$file = fopen('HW2Vals4.csv', 'a');
+	
+}
+
 $data = array( array( $IR , $RED) );
 
-foreach($data as $row)
-{
+foreach($data as $row){
 	fputcsv($file, $row);
 }
 
