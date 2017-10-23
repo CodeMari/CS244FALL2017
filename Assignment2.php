@@ -1,27 +1,28 @@
 <?php
+
 $servername = "localhost";
 $username = "root";
 $password = "";
 $dbname = "esp8266asgn1";
 
-#$IR = $_GET["IR"];
-#$RED = $_GET["RED"];
+$IRArray = json_decode($_GET['IR']);
+$REDArray = json_decode($_GET['RED']);
 
-if(!file_exists('HW2Vals4.csv')) {
+if(!file_exists('HW2Vals.csv')) {
 
-	$file = fopen('HW2Vals4.csv', 'w');
-	#fputcsv($file, array('IR', 'RED'));
+	$file = fopen('HW2Vals.csv', 'w');
+	fputcsv($file, array('IR', 'RED'));
 
 } else {
 
-	$file = fopen('HW2Vals4.csv', 'a');
+	$file = fopen('HW2Vals.csv', 'a');
 	
 }
 
-#$data = array( array( $IR , $RED) );
+$size = min(count($REDArray), count($IRArray));
 
-foreach($data as $row){
-	fputcsv($file, $row);
+for($i = 0; $i < $size; $i++){
+		fputcsv($file, array($IRArray[$i], $REDArray[$i]));	
 }
 
 fclose($file);
