@@ -1,0 +1,64 @@
+clc
+close all
+clear all
+
+Data = csvread('takashin_Homework_sample.csv', 1, 0);
+
+Time = Data(:,1);
+IR = Data(:,2);
+RED = Data(:,3);
+
+plot(Time, IR, 'b', Time, RED, 'r');
+title('IR and RED signals against Time');
+
+%%
+FilterDegree = 4; LowFreq = 1; HighFreq = 2; SampleFreq = 50; FirstSample = FilterDegree*SampleFreq;
+hd = design(fdesign.bandpass('N,Fc1,Fc2',FilterDegree,LowFreq,HighFreq,SampleFreq),'butter');
+fvtool(hd)
+
+IRFiltered = filter(hd,IR);
+REDFiltered = filter(hd,RED);
+
+figure
+plot(Time(FirstSample:end), IRFiltered(FirstSample:end), 'b', Time(FirstSample:end), REDFiltered(FirstSample:end), 'r');
+title('Filtered IR and RED signals');
+%%
+SignalToUse = IRFiltered(FirstSample:end);
+AvgWindow = 5;
+AvgFilter = ones(1,AvgWindow)/AvgWindow;
+
+SignalToUse = filter(AvgFilter, 1, SignalToUse);
+%%
+Threshold = 0.0;
+MinPeakHeight = 1;
+MinPeakDistance = 30;
+figure, plot(Time(FirstSample:end), SignalToUse), hold on
+
+[peakValues, indexes] = findpeaks(SignalToUse, 'THRESHOLD', Threshold, 'MINPEAKHEIGHT', MinPeakHeight, 'MINPEAKDISTANCE', MinPeakDistance);
+
+plot(Time(indexes) + FilterDegree, peakValues + 0.05, 'k^', 'markerfacecolor', [1 0 0])
+title('Signal with detected peaks');
+
+%%
+HeartRate = zeros(size(indexes));
+Window = 5;
+if Window < 2 
+    Window = 2;
+end
+
+LoopStart = Window;
+
+for i= LoopStart : 1 : size(indexes)
+    
+    for j = i-Window+1 : 1 : i-1
+        HeartRate(i) = HeartRate(i) + (60 * SampleFreq) / (indexes(j+1) - indexes(j));
+    end
+    
+    HeartRate(i) = HeartRate(i) / (Window - 1);
+    
+end
+
+HeartRate = HeartRate(LoopStart:size(HeartRate));
+
+figure, plot(HeartRate)
+title('Detected Heart Rate');
