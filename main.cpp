@@ -1,6 +1,11 @@
 #include "Arduino.h"
 #include <ESP8266WiFi.h>
 #include <ESP8266HTTPClient.h>
+#include <string>
+#include <sstream>
+#include "SparkFunLIS3DH.h"
+#include "Wire.h"
+#include "SPI.h" 
 
 String deviceName = "CS244";
 
@@ -8,9 +13,16 @@ String deviceName = "CS244";
 const char *ssid = "UCInet Mobile Access";
  
 //Server details
-const char* host = "169.234.55.71";
+const char* host = "169.234.6.224";
 const int httpPort = 8888;
-const char* streamId   = "CS244HW1/CSVConn.php";
+const char* streamId   = "CS244HW4/Assignment4.php";
+
+const int SIZE_OF_DATA = 8;
+float X[200]= {};
+float Y[200]= {};
+float Z[200]= {};
+
+int i=0; 
 
 void printMacAddress()
 {
@@ -32,7 +44,54 @@ void printMacAddress()
     Serial.println(WiFi.localIP());
 }
 
-void sendString(String stringToSend) {
+String convertArrayToString(float Data[], int size = SIZE_OF_DATA) {
+    
+        String arrayString = "[";
+    
+        for(int i = 0; i < size - 1; i++) {
+            arrayString += String(Data[i]) + ",";
+        }
+    
+        arrayString += String(Data[size-1]) + "]";
+    
+        return arrayString;
+    
+    }
+
+    // std::string Convert (float number){
+    //     std::ostringstream buff;
+    //     buff<<number;
+    //     return buff.str();   
+    // }
+    
+    void sendArrayToServer(float X[], float Y[], float Z[], int size = SIZE_OF_DATA) {
+    
+        //Try connecting to host
+        WiFiClient client;
+        if(!client.connect(host,httpPort)) {
+            Serial.println("Cannot connect");
+            return;
+        } 
+        //Create the URL
+       String url = "/";
+        url += streamId;
+        url += "?X=" + convertArrayToString(X,SIZE_OF_DATA);
+        url += "&Y=" + convertArrayToString(Y,SIZE_OF_DATA);
+        url += "&Z=" + convertArrayToString(Z,SIZE_OF_DATA);
+    //char *cstr = url.c_str();
+
+        //Request URL
+        client.print(String("GET ") + url.c_str() + " HTTP/1.1\r\n" +
+                    "Host: " + host + "\r\n" +
+                    "Connection: close\r\n\r\n");
+    
+        //Stop client
+        client.stop(); 
+    
+    }
+
+void sendString(String stringToSend) 
+{
 
     Serial.print("Connecting to ");
     Serial.println(host);
@@ -43,51 +102,48 @@ void sendString(String stringToSend) {
         Serial.println("Cannot connect");
         return;
     }
-
-    //Create the URL
-    String url = "/";
-    url += streamId;
-    url += "?Transmission="; //This is our parameter name for our PHP file
-    url += stringToSend;
-
-    //Request URL
-    Serial.println("Requesting URL: " + url);
-    client.print(String("GET ") + url + " HTTP/1.1\r\n" +
-                "Host: " + host + "\r\n" +
-                "Connection: close\r\n\r\n");
-    
-    // Read reply from server
-    // Helps in debugging e.g. a permissions error
-    while(client.available()){
-        String line = client.readStringUntil('\r');
-        Serial.println(line);
-    }
-
-
-    //Stop client
-    client.stop(); 
-    Serial.println("");
-    Serial.println("Closing connection");
-
-    delay(500);
+        
 
 }
+LIS3DH myIMU;
 
-void setup()
-{  
-    Serial.begin(115200);
-    
-    printMacAddress();
 
-    sendString("Twaha");
-    sendString("Ibrahim");
-    sendString("Amari");
-    sendString("Lewis");
-    sendString("Nora");
-    sendString("Alzaid");
+void setup() {
+  // put your setup code here, to run once:
+  Serial.begin(9600);
+  delay(1000); //relax...
+  Serial.println("Processor came out of reset.\n");
+  myIMU.settings.adcEnabled = 1;
+  myIMU.settings.tempEnabled = 0;
+  myIMU.settings.accelSampleRate = 50;  //Hz.  Can be: 0,1,10,25,50,100,200,400,1600,5000 Hz
+  myIMU.settings.accelRange = 2;      //Max G force readable.  Can be: 2, 4, 8, 16
+  myIMU.begin();
+
+
 }
-
+  
 void loop()
 {
-  //Nothing needed here
+  
+    X[i] = myIMU.readFloatAccelX();
+    Y[i]= myIMU.readFloatAccelY();
+    Z[i]= myIMU.readFloatAccelZ();
+
+  //Get all parameters
+  Serial.print("\nAccelerometer:\n");
+  Serial.print(" X = ");
+  Serial.println(X[i], 4);
+  Serial.print(" Y = ");
+  Serial.println(Y[i], 4);
+  Serial.print(" Z = ");
+  Serial.println(Z[i], 4);
+i++;
+if (i == SIZE_OF_DATA)
+{
+    sendArrayToServer(X,Y,Z,SIZE_OF_DATA);
+    i=0;
+}
+ 
+ 
+  delay(1000);
 }
