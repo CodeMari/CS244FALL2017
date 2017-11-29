@@ -1,0 +1,202 @@
+#include "Arduino.h"
+#include <ESP8266WiFi.h>
+#include <ESP8266HTTPClient.h>
+#include <string>
+#include <sstream>
+#include "SparkFunLIS3DH.h"
+#include "Wire.h"
+#include "SPI.h" 
+#include "MAX30105.h" 
+
+String deviceName = "CS244";
+
+// WiFi settings
+const char *ssid = "UCInet Mobile Access";
+ 
+//Server details
+const char* host = "169.234.45.34";
+const int httpPort = 8889;
+const char* streamId   = "CS244HW7/Assignment7.php";
+
+MAX30105 particleSensor;
+LIS3DH myIMU;
+
+const byte powerLevel = 0x1F;
+
+const int sampleRate = 50;
+const byte sampleAverage = 1;
+const byte ledMode = 3;
+const int pulseWidth = 411;
+const int adcRange = 4096;
+
+const int SIZE_OF_DATA = 50;
+const int MAX_SAMPLES = 30000;
+int RED_ARRAY[SIZE_OF_DATA];
+int IR_ARRAY[SIZE_OF_DATA];
+int array_location = 0;
+int total_samples = 0;
+
+float X[SIZE_OF_DATA];
+float Y[SIZE_OF_DATA];
+float Z[SIZE_OF_DATA];
+
+int i=0; 
+
+void printMacAddress()
+{
+    byte mac[6];
+    WiFi.macAddress(mac);
+
+    char MAC_char[18]="";
+    for (int i = 0; i < sizeof(mac); ++i)
+        sprintf(MAC_char, "%s%02x:", MAC_char, mac[i]);
+
+    Serial.print("Mac address : ");
+    Serial.print(MAC_char);
+
+    WiFi.begin(ssid);
+    while (WiFi.status() != WL_CONNECTED) delay(500);
+
+    //Print the IP address
+    Serial.println("\r\nWiFi connected");
+    Serial.println(WiFi.localIP());
+}
+
+String convertArrayToString(float Data[], int size = SIZE_OF_DATA) {
+    
+        String arrayString = "[";
+    
+        for(int i = 0; i < size - 1; i++) {
+            arrayString += String(Data[i]) + ",";
+        }
+    
+        arrayString += String(Data[size-1]) + "]";
+    
+        return arrayString;
+    
+    }
+
+    String convertArrayToString2 (int Data[], int size = SIZE_OF_DATA) {
+        
+            String arrayString = "[";
+        
+            for(int i = 0; i < size - 1; i++) {
+                arrayString += String(Data[i]) + ",";
+            }
+        
+            arrayString += String(Data[size-1]) + "]";
+        
+            return arrayString;
+        
+        }
+    
+    void sendArrayToServer(int IR[], int RED[], float X[], float Y[], float Z[], int size = SIZE_OF_DATA) {
+    
+        //Try connecting to host
+        WiFiClient client;
+        if(!client.connect(host,httpPort)) {
+            Serial.println("Cannot connect");
+            return;
+        } 
+        //Create the URL
+       String url = "/";
+        url += streamId;
+        url += "?X=" + convertArrayToString(X,SIZE_OF_DATA);
+        url += "&Y=" + convertArrayToString(Y,SIZE_OF_DATA);
+        url += "&Z=" + convertArrayToString(Z,SIZE_OF_DATA);
+        url += "&IR=" + convertArrayToString2(IR,SIZE_OF_DATA);
+        url += "&RED=" + convertArrayToString2(RED,SIZE_OF_DATA);
+
+
+    //char *cstr = url.c_str();
+
+        //Request URL
+        client.print(String("GET ") + url.c_str() + " HTTP/1.1\r\n" +
+                    "Host: " + host + "\r\n" +
+                    "Connection: close\r\n\r\n");
+    
+        //Stop client
+        client.stop(); 
+    
+    }
+
+void sendString(String stringToSend) 
+{
+
+    Serial.print("Connecting to ");
+    Serial.println(host);
+
+    //Try connecting to host
+    WiFiClient client;
+    if(!client.connect(host,httpPort)) {
+        Serial.println("Cannot connect");
+        return;
+    }
+        
+
+}
+
+void setupSensorBoard() {
+    
+        Serial.println("Initializing sensor board...");
+      
+        // Initialize sensor
+        while (!particleSensor.begin(Wire, I2C_SPEED_FAST)) //Use default I2C port, 400kHz speed
+        {
+          Serial.println("MAX30105 was not found. Please check wiring/power. ");
+          delay(500);
+        }
+      
+        //Configure sensor.
+        particleSensor.setup(powerLevel, sampleAverage, ledMode, sampleRate, pulseWidth, adcRange); 
+    }
+
+void setup() {
+
+  Serial.begin(115200);
+  delay(1000); //relax...
+
+  printMacAddress();
+
+
+  Serial.println("Processor came out of reset.\n");
+  myIMU.settings.adcEnabled = 1;
+  myIMU.settings.tempEnabled = 0;
+  myIMU.settings.accelSampleRate = 50;                     //Hz.  Can be: 0,1,10,25,50,100,200,400,1600,5000 Hz
+  myIMU.settings.accelRange = 2;                        //Max G force readable.  Can be: 2, 4, 8, 16
+  myIMU.begin();
+  
+  
+  setupSensorBoard();
+
+}
+  
+void loop()
+{
+
+    if(total_samples >= MAX_SAMPLES) {
+        Serial.println("Done collecting samples!");
+        return;
+    }
+
+    int RED = particleSensor.getRed();
+    int IR = particleSensor.getIR();
+  
+    X[i] = myIMU.readFloatAccelX();
+    Y[i]= myIMU.readFloatAccelY();
+    Z[i]= myIMU.readFloatAccelZ();
+    RED_ARRAY[i] = RED;
+    IR_ARRAY[i] = IR;
+    i++;
+
+    if (i == SIZE_OF_DATA)
+    {
+        total_samples += i;
+        Serial.println("Sending to server...");
+        sendArrayToServer(IR_ARRAY,RED_ARRAY,X,Y,Z,SIZE_OF_DATA);
+        i=0;
+        Serial.print("Total samples collected: ");
+        Serial.println(total_samples);
+    }
+ 
+}
